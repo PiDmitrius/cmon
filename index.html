@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>cmon</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%230d1117'/%3E%3Crect x='4' y='5' width='8' height='2' rx='1' fill='%2358a6ff'/%3E%3Crect x='14' y='5' width='14' height='2' rx='1' fill='%23c9d1d9'/%3E%3Crect x='4' y='10' width='10' height='2' rx='1' fill='%233fb950'/%3E%3Crect x='16' y='10' width='12' height='2' rx='1' fill='%23b1bac4'/%3E%3Crect x='4' y='15' width='6' height='2' rx='1' fill='%236e7681'/%3E%3Crect x='12' y='15' width='16' height='2' rx='1' fill='%236e7681'/%3E%3Crect x='4' y='20' width='10' height='2' rx='1' fill='%233fb950'/%3E%3Crect x='16' y='20' width='10' height='2' rx='1' fill='%23b1bac4'/%3E%3Crect x='4' y='25' width='8' height='2' rx='1' fill='%2358a6ff'/%3E%3Crect x='14' y='25' width='12' height='2' rx='1' fill='%23c9d1d9'/%3E%3C/svg%3E">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0d1117; }
+::-webkit-scrollbar-thumb { background: #21262d; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #30363d; }
+html { scrollbar-color: #21262d #0d1117; scrollbar-width: thin; }
+body {
+  background: #0d1117;
+  color: #c9d1d9;
+  font-family: -apple-system, system-ui, 'SF Mono', 'Menlo', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 0;
+  -webkit-transform: translateZ(0);
+  overflow: hidden;
+  height: 100vh;
+}
+@media (min-width: 768px) {
+  body { font-size: 13px; line-height: 1.5; }
+  #toolbar { padding: 8px 16px; gap: 16px; }
+}
+#auth {
+  display: flex; align-items: center; justify-content: center; height: 100vh;
+}
+#auth .box { text-align: center; }
+#auth .title { color: #58a6ff; font-size: 16px; font-weight: bold; margin-bottom: 16px; }
+#auth input {
+  background: #161b22; color: #c9d1d9; border: 1px solid #30363d;
+  border-radius: 4px; padding: 8px 12px; font-family: inherit;
+  font-size: 16px; width: 480px; max-width: 90vw; text-align: center;
+}
+#auth button {
+  display: block; margin: 12px auto 0; background: #238636; color: #fff;
+  border: none; border-radius: 6px; padding: 10px 32px; font-size: 15px;
+  font-family: inherit; cursor: pointer;
+}
+#auth button:hover { background: #2ea043; }
+#err { color: #f85149; font-size: 12px; margin-top: 8px; }
+
+#app {
+  display: none; max-width: 1200px; margin: 0 auto;
+  height: 100vh; flex-direction: column;
+}
+#app.active { display: flex; }
+#scroll-wrap {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+#toolbar {
+  position: sticky; top: 0; z-index: 10;
+  background: #161b22; border-bottom: 1px solid #30363d;
+  padding: 6px 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+#toolbar .title { font-weight: bold; color: #58a6ff; font-size: 13px; }
+#toolbar label { color: #8b949e; font-size: 12px; cursor: pointer; user-select: none; }
+#toolbar input[type="checkbox"] { margin-right: 4px; }
+.dropdown { position: relative; display: inline-block; }
+.dropdown-btn {
+  background: #0d1117; color: #8b949e; border: 1px solid #30363d;
+  border-radius: 4px; padding: 3px 24px 3px 8px; font-family: inherit;
+  font-size: 12px; cursor: pointer; white-space: nowrap; user-select: none;
+}
+.dropdown-btn:hover { border-color: #484f58; color: #c9d1d9; }
+.dropdown-btn::after {
+  content: ''; position: absolute; right: 8px; top: 50%;
+  transform: translateY(-50%); border: 4px solid transparent; border-top-color: #484f58;
+}
+.dropdown-menu {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0;
+  min-width: 100%; max-height: 300px; overflow-y: auto;
+  background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+  padding: 4px 0; z-index: 20; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.dropdown-menu.open { display: block; }
+.dropdown-item {
+  padding: 4px 12px; color: #8b949e; font-size: 12px;
+  cursor: pointer; white-space: nowrap; font-family: inherit;
+}
+.dropdown-item:hover { background: #21262d; color: #c9d1d9; }
+.dropdown-item.active { color: #58a6ff; }
+
+#log { padding: 8px 0; }
+
+.entry {
+  display: grid; grid-template-columns: 56px 1fr;
+  padding: 1px 8px; position: relative;
+}
+@media (min-width: 768px) {
+  .entry { grid-template-columns: 72px 1fr; padding: 1px 16px; }
+}
+.entry:hover { background: #161b22; }
+.entry .role {
+  white-space: nowrap; padding-right: 8px; text-align: right;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.entry .content {
+  white-space: pre-wrap; word-break: break-word; min-width: 0; padding-right: 4px;
+}
+.entry .meta {
+  position: absolute; right: 0; top: 0; color: #8b949e;
+  font-size: 11px; pointer-events: none; text-align: right;
+  padding: 1px 12px 1px 24px;
+  background: linear-gradient(90deg, transparent 0%, #0d1117 24px);
+  opacity: 0; transition: opacity 0.15s; white-space: nowrap;
+}
+.entry:hover .meta { opacity: 1; }
+
+.role-user { color: #58a6ff; font-weight: bold; }
+.role-agent { color: #3fb950; font-weight: bold; }
+.role-tool { color: #8b949e; font-weight: bold; }
+.text-user { color: #c9d1d9; }
+.text-agent { color: #b1bac4; }
+.text-tool { color: #6e7681; font-size: 12px; }
+.tool-badge { color: #f85149; font-size: 11px; font-weight: normal; }
+.tool-desc { color: #8b949e; font-size: 12px; }
+
+.spoiler { margin-top: 0; }
+.spoiler summary { color: #484f58; cursor: pointer; font-size: 12px; user-select: none; }
+.spoiler summary:hover { color: #8b949e; }
+.turn-sep { height: 6px; }
+
+#scroll-btn {
+  position: fixed; bottom: 16px; right: 16px;
+  background: #21262d; color: #8b949e; border: 1px solid #30363d;
+  border-radius: 50%; width: 44px; height: 44px;
+  font-size: 22px; line-height: 44px; text-align: center;
+  cursor: pointer; display: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+#scroll-btn:hover { background: #30363d; color: #c9d1d9; }
+</style>
+</head>
+<body>
+<div id="auth" style="display:none;">
+  <div class="box">
+    <div class="title">cmon</div>
+    <input id="keyInput" type="text" placeholder="token" autocomplete="off" spellcheck="false">
+    <button id="go">connect</button>
+    <div id="err"></div>
+  </div>
+</div>
+<div id="app">
+  <div id="toolbar">
+    <span class="title">cmon</span>
+    <label><input type="checkbox" id="showTools" checked> tools</label>
+
+    <div class="dropdown" id="sessionDropdown">
+      <div class="dropdown-btn" id="sessionBtn">all sessions</div>
+      <div class="dropdown-menu" id="sessionMenu">
+        <div class="dropdown-item active" data-value="">all sessions</div>
+      </div>
+    </div>
+
+  </div>
+  <div id="scroll-wrap">
+    <div id="log"></div>
+  </div>
+  <div id="scroll-btn">&#8595;</div>
+</div>
+
+<script>
+// Pure JS SHA-256
+const sha256 = (() => {
+  const K = new Uint32Array([
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ]);
+  const r=(x,n)=>(x>>>n)|(x<<(32-n));
+  return async function(data) {
+    if(!(data instanceof Uint8Array)) data=new Uint8Array(data);
+    // Deep copy to own buffer (Safari shared buffer workaround)
+    const input=data.slice(0);
+    const n=input.length,bl=n*8,pl=(((n+8)>>>6)+1)<<6;
+    const buf=new ArrayBuffer(pl);
+    const p=new Uint8Array(buf);p.set(input);p[n]=0x80;
+    const dv=new DataView(buf);dv.setUint32(pl-4,bl,false);
+    let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a;
+    let h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+    const w=new Uint32Array(new ArrayBuffer(256));
+    for(let o=0;o<pl;o+=64){
+      for(let i=0;i<16;i++)w[i]=dv.getUint32(o+i*4,false);
+      for(let i=16;i<64;i++){const s0=r(w[i-15],7)^r(w[i-15],18)^(w[i-15]>>>3);const s1=r(w[i-2],17)^r(w[i-2],19)^(w[i-2]>>>10);w[i]=(w[i-16]+s0+w[i-7]+s1)|0;}
+      let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+      for(let i=0;i<64;i++){const S1=r(e,6)^r(e,11)^r(e,25);const ch=(e&f)^(~e&g);const t1=(h+S1+ch+K[i]+w[i])|0;const S0=r(a,2)^r(a,13)^r(a,22);const maj=(a&b)^(a&c)^(b&c);const t2=(S0+maj)|0;h=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;}
+      h0=(h0+a)|0;h1=(h1+b)|0;h2=(h2+c)|0;h3=(h3+d)|0;h4=(h4+e)|0;h5=(h5+f)|0;h6=(h6+g)|0;h7=(h7+h)|0;
+    }
+    const obuf=new ArrayBuffer(32);const out=new Uint8Array(obuf),ov=new DataView(obuf);
+    ov.setUint32(0,h0,false);ov.setUint32(4,h1,false);ov.setUint32(8,h2,false);ov.setUint32(12,h3,false);
+    ov.setUint32(16,h4,false);ov.setUint32(20,h5,false);ov.setUint32(24,h6,false);ov.setUint32(28,h7,false);
+    return out;
+  };
+})();
+
+// Cryptash
+
+async function cryptashCBC(v,k,d,enc){
+  const n=d.length;if(n===0)return new Uint8Array(0);
+  const vk=new Uint8Array(v.length+k.length);vk.set(v);vk.set(k,v.length);
+  k=await sha256(vk);
+  const o=new Uint8Array(n);
+  for(let i=0;;){
+    const l=Math.min(32,n-i);
+    for(let j=0;j<l;j++)o[i+j]=d[i+j]^k[j];
+    i+=l;if(i>=n)break;
+    const src=enc?o.slice(i-32,i):d.slice(i-32,i);
+    const sk=new Uint8Array(32+k.length);sk.set(src);sk.set(k,32);
+    k=await sha256(sk);
+  }
+  return o;
+}
+
+async function decrypt(data){
+  const iv=data.slice(0,4),mac=data.slice(4,8);
+  const ivk=new Uint8Array(4+encKeyBytes.length);ivk.set(iv);ivk.set(encKeyBytes,4);
+  const key=await sha256(ivk);
+  const pt=await cryptashCBC(data.slice(0,8),key,data.slice(8),false);
+  const mk=new Uint8Array(pt.length+key.length);mk.set(pt);mk.set(key,pt.length);
+  const mh=await sha256(mk);
+  for(let i=0;i<4;i++)if(mac[i]!==mh[i])return null;
+  return new TextDecoder().decode(pt.slice(4));
+}
+
+// Encrypt (client->server)
+async function encrypt(text) {
+  const iv = new Uint8Array(4); crypto.getRandomValues(iv);
+  const pad = new Uint8Array(4); crypto.getRandomValues(pad);
+  const textBytes = new TextEncoder().encode(text);
+  const pt = new Uint8Array(4 + textBytes.length);
+  pt.set(pad); pt.set(textBytes, 4);
+  const ivk = new Uint8Array(4 + encKeyBytes.length); ivk.set(iv); ivk.set(encKeyBytes, 4);
+  const key = await sha256(ivk);
+  const mk = new Uint8Array(pt.length + key.length); mk.set(pt); mk.set(key, pt.length);
+  const macH = await sha256(mk);
+  const prefix = new Uint8Array(8); prefix.set(iv); prefix.set(macH.slice(0, 4), 4);
+  const ct = await cryptashCBC(prefix, key, pt, true);
+  const result = new Uint8Array(8 + ct.length); result.set(prefix); result.set(ct, 8);
+  return result;
+}
+
+async function apiCall(cmd) {
+  const body = await encrypt(JSON.stringify(cmd));
+  const blob = new Blob([body]);
+  const resp = await fetch('/api', {method: 'POST', body: blob});
+  if (!resp.ok) return null;
+  const buf = new Uint8Array(await resp.arrayBuffer());
+  return await decrypt(buf);
+}
+
+// Auth
+let encKeyBytes = null;
+const authEl = document.getElementById('auth');
+const appEl = document.getElementById('app');
+const keyEl = document.getElementById('keyInput');
+const errEl = document.getElementById('err');
+
+async function tryKey(token) {
+  encKeyBytes = await sha256(new TextEncoder().encode(token));
+  // Auth handshake
+  const nonce = Math.random().toString(36).substring(2);
+  const resp = await apiCall({cmd: 'auth', nonce: nonce});
+  if (!resp) { localStorage.removeItem('cmon_key'); errEl.textContent = 'auth: decrypt failed (wrong key?)'; return false; }
+  const auth = JSON.parse(resp);
+  if (!auth.ok || auth.nonce !== nonce) { errEl.textContent = 'auth failed'; return false; }
+  // Load history
+  const histResp = await apiCall({cmd: 'history'});
+  if (!histResp) { errEl.textContent = 'history failed'; return false; }
+  const histData = JSON.parse(histResp);
+  localStorage.setItem('cmon_key', token);
+  authEl.style.display = 'none';
+  appEl.classList.add('active');
+  startApp(histData.entries || [], histData.total, histData.gen || 0);
+  return true;
+}
+
+async function doConnect(){
+  errEl.textContent='';
+  const token=keyEl.value.trim();
+  if(token.length < 1){errEl.textContent='enter key';return;}
+  try{if(!await tryKey(token))authEl.style.display='';}catch(e){errEl.textContent=e.message;authEl.style.display='';}
+}
+keyEl.addEventListener('keydown',ev=>{if(ev.key==='Enter')doConnect();});
+document.getElementById('go').addEventListener('click',doConnect);
+
+(async()=>{
+  const saved=localStorage.getItem('cmon_key');
+  if(saved&&saved.length>0){
+    try{if(await tryKey(saved))return;}catch(e){}
+    localStorage.removeItem('cmon_key');
+  }
+  authEl.style.display='';
+  keyEl.focus();
+})();
+
+// App
+function startApp(entries, totalKnown, initialGen) {
+
+const logEl=document.getElementById('log');
+const showToolsEl=document.getElementById('showTools');
+const scrollBtn=document.getElementById('scroll-btn');
+const sessionBtn=document.getElementById('sessionBtn');
+const sessionMenu=document.getElementById('sessionMenu');
+let sessionFilterValue='';
+
+const SPOILER_THRESHOLD=10;
+const SPOILER_HARD=Math.floor(SPOILER_THRESHOLD*1.5);
+
+const knownSessions=new Set();
+let lastRole=null, lastEntryUnix=0;
+let allEntries=entries;
+
+function escapeHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+function formatDelta(ms){
+  if(ms<0)ms=0;
+  if(ms<1000)return ms+'ms';
+  const s=ms/1000;if(s<60)return s.toFixed(1)+'s';
+  const m=s/60;if(m<60)return m.toFixed(1)+'min';
+  return(m/60).toFixed(1)+'h';
+}
+
+function addSession(sid){
+  if(!knownSessions.has(sid)){
+    knownSessions.add(sid);
+    const item=document.createElement('div');
+    item.className='dropdown-item';item.dataset.value=sid;item.textContent=sid;
+    sessionMenu.appendChild(item);
+  }
+}
+
+function isEntryVisible(role,sid){
+  if(role==='tool'&&!showToolsEl.checked)return false;
+  if(sessionFilterValue&&sid!==sessionFilterValue)return false;
+  return true;
+}
+
+sessionBtn.addEventListener('click',ev=>{ev.stopPropagation();sessionMenu.classList.toggle('open');});
+document.addEventListener('click',()=>{sessionMenu.classList.remove('open');});
+sessionMenu.addEventListener('click',ev=>{
+  const item=ev.target.closest('.dropdown-item');if(!item)return;
+  sessionMenu.querySelectorAll('.dropdown-item').forEach(el=>el.classList.remove('active'));
+  item.classList.add('active');
+  sessionFilterValue=item.dataset.value;
+  sessionBtn.textContent=item.textContent;
+  sessionMenu.classList.remove('open');
+  rerenderAll();
+});
+
+function formatTextBlock(text){
+  const lines=text.split('\n');
+  if(lines.length<=SPOILER_HARD)return escapeHtml(text);
+  const vis=lines.slice(0,SPOILER_THRESHOLD),hid=lines.slice(SPOILER_THRESHOLD);
+  return escapeHtml(vis.join('\n'))+'<details class="spoiler"><summary>... '+hid.length+' more lines</summary>'+escapeHtml(hid.join('\n'))+'</details>';
+}
+
+function renderEntry(e){
+  const frag=document.createDocumentFragment();
+  const role=e.role.toLowerCase();
+  const textClass='text-'+role, roleClass='role-'+role;
+  addSession(e.sid);
+  const vis=isEntryVisible(role,e.sid);
+  if(!vis)return frag;
+
+  // Turn separator
+  if((role==='user'||role==='agent')&&lastRole&&lastRole!==role&&lastRole!=='tool'){
+    const sep=document.createElement('div');sep.className='turn-sep';frag.appendChild(sep);
+  }
+  if(role==='user'&&lastRole==='tool'){
+    const sep=document.createElement('div');sep.className='turn-sep';frag.appendChild(sep);
+  }
+
+  // Meta
+  let metaText=e.ts;
+  if(role!=='user'&&lastEntryUnix&&e.unix){
+    metaText=formatDelta(e.unix-lastEntryUnix)+' @ '+e.ts;
+  }
+  lastEntryUnix=e.unix;
+  const meta='<span class="meta">'+escapeHtml(metaText)+'</span>';
+
+  const text=e.text.trim();
+  if(role==='tool'){
+    const toolNames={'memory_search':'memory','web_search':'search','web_fetch':'fetch'};
+    const rawName=e.toolName?(e.toolName.toLowerCase()):'';
+    const toolLabel=toolNames[e.toolName]||rawName||'tool';
+    const badge=e.toolMeta?(' <span class="tool-badge">'+escapeHtml(e.toolMeta)+'</span> '):'';
+    const desc=e.toolDesc?('<span class="tool-desc">'+escapeHtml(e.toolDesc)+'</span> '):'';
+    const div=document.createElement('div');
+    div.className='entry';div.dataset.role=role;div.dataset.sid=e.sid;
+    const resultHtml=formatTextBlock(text);
+    const roleHtml='<span class="role '+roleClass+'" title="'+escapeHtml(toolLabel)+'">'+escapeHtml(toolLabel)+':</span>';
+    div.innerHTML=roleHtml+'<span class="content '+textClass+'">'+desc+badge+(desc&&text?'\n':'')+resultHtml+'</span>'+meta;
+    frag.appendChild(div);
+  } else {
+    const div=document.createElement('div');
+    div.className='entry';div.dataset.role=role;div.dataset.sid=e.sid;
+    div.innerHTML='<span class="role '+roleClass+'">'+escapeHtml(e.role)+':</span><span class="content '+textClass+'">'+escapeHtml(text)+'</span>'+meta;
+    frag.appendChild(div);
+  }
+  lastRole=role;
+  return frag;
+}
+
+const scrollWrap=document.getElementById('scroll-wrap');
+function scrollToBottom(){scrollWrap.scrollTop=scrollWrap.scrollHeight;}
+function isAtBottom(){return(scrollWrap.scrollTop+scrollWrap.clientHeight)>=(scrollWrap.scrollHeight-50);}
+function doScrollDown(ev){
+  if(ev)ev.preventDefault();
+  ignoreScroll=true;
+  scrollToBottom();
+  userScrolledUp=false;
+  scrollBtn.style.display='none';
+  requestAnimationFrame(()=>{ ignoreScroll=false; });
+}
+scrollBtn.addEventListener('touchstart',doScrollDown,{passive:false});
+scrollBtn.addEventListener('click',doScrollDown);
+function updateCounts(){
+  const counts={};
+  let total=0;
+  for(const e of allEntries){
+    total++;
+    const sid=e.sid;
+    if(sid)counts[sid]=(counts[sid]||0)+1;
+  }
+  sessionMenu.querySelectorAll('.dropdown-item').forEach(item=>{
+    const v=item.dataset.value;
+    if(v===''){
+      item.textContent='all ('+total+')';
+      if(!sessionFilterValue)sessionBtn.textContent='all ('+total+')';
+    } else if(v in counts){
+      item.textContent=v+' ('+counts[v]+')';
+      if(sessionFilterValue===v)sessionBtn.textContent=v+' ('+counts[v]+')';
+    }
+  });
+}
+
+function rerenderAll(){
+  logEl.innerHTML='';lastRole=null;lastEntryUnix=0;
+  knownSessions.clear();
+  sessionMenu.querySelectorAll('.dropdown-item:not([data-value=""])').forEach(el=>el.remove());
+  for(const e of allEntries)logEl.appendChild(renderEntry(e));
+  updateCounts();
+}
+
+showToolsEl.addEventListener('change',()=>{const b=isAtBottom();rerenderAll();if(b)scrollToBottom();});
+
+let userScrolledUp=false;
+let ignoreScroll=false;
+scrollWrap.addEventListener('scroll',()=>{
+  if(ignoreScroll)return;
+  if(isAtBottom()){userScrolledUp=false;scrollBtn.style.display='none';}
+  else{userScrolledUp=true;scrollBtn.style.display='block';}
+});
+
+// Initial render in batches
+async function initialRender() {
+  logEl.innerHTML = '';
+  lastRole=null; lastEntryUnix=0;
+  const B = 100;
+  for (let i = 0; i < allEntries.length; i += B) {
+    const end = Math.min(i + B, allEntries.length);
+    for (let j = i; j < end; j++) logEl.appendChild(renderEntry(allEntries[j]));
+    if (i + B < allEntries.length) await new Promise(r => setTimeout(r, 0));
+  }
+  updateCounts();
+  scrollToBottom();
+}
+initialRender();
+
+// Long polling with generation tracking
+let known = totalKnown;
+let gen = initialGen;
+let pollDelay = 100;
+async function poll() {
+  try {
+    const resp = await apiCall({cmd: 'poll', after: known, gen: gen});
+    if (!resp) {
+      localStorage.removeItem('cmon_key');
+      location.reload();
+      return;
+    }
+    const data = JSON.parse(resp);
+    if (data.reset) {
+      // Structural change (rename/delete) -- full reload
+      allEntries = data.entries || [];
+      gen = data.gen;
+      known = data.total;
+      rerenderAll();
+      if (!userScrolledUp) scrollToBottom();
+    } else if (data.entries && data.entries.length > 0) {
+      for (const e of data.entries) {
+        allEntries.push(e);
+        logEl.appendChild(renderEntry(e));
+      }
+      updateCounts();
+      if (!userScrolledUp) scrollToBottom();
+    }
+    gen = data.gen;
+    known = data.total;
+    pollDelay = 100;
+  } catch(e) {
+    pollDelay = Math.min(pollDelay * 2, 30000);
+  }
+  setTimeout(poll, pollDelay);
+}
+poll();
+
+} // end startApp
+</script>
+</body>
+</html>
