@@ -119,7 +119,7 @@ cmon run
 Build and restart in one command (run from repo root):
 
 ```bash
-cmon stop && go build -o ~/go/bin/cmon . && cmon run
+go build -o ~/go/bin/cmon . && cmon stop && cmon run
 ```
 
 No sudo needed — `~/go/bin/` is writable, and `cmon run` registers the absolute path in the systemd user service automatically.
