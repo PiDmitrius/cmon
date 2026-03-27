@@ -129,6 +129,13 @@ body {
 .spoiler summary:hover { color: #8b949e; }
 .turn-sep { height: 6px; }
 
+#conn-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #3fb950; flex-shrink: 0;
+  margin-left: auto;
+  transition: background 0.3s;
+}
+#conn-dot.err { background: #f85149; }
 #scroll-btn {
   position: fixed; bottom: calc(16px + env(safe-area-inset-bottom)); right: 16px;
   background: #21262d; color: #8b949e; border: 1px solid #30363d;
@@ -161,7 +168,7 @@ body {
         <div class="dropdown-item active" data-value="">all sessions</div>
       </div>
     </div>
-
+    <div id="conn-dot"></div>
   </div>
   <div id="scroll-wrap">
     <div id="log"></div>
@@ -485,6 +492,7 @@ initialRender();
 // Long polling with generation tracking
 let known = totalKnown;
 let gen = initialGen;
+const connDot = document.getElementById('conn-dot');
 let pollDelay = 100;
 async function poll() {
   try {
@@ -513,8 +521,10 @@ async function poll() {
     gen = data.gen;
     known = data.total;
     pollDelay = 100;
+    connDot.classList.remove('err');
   } catch(e) {
-    pollDelay = Math.min(pollDelay * 2, 30000);
+    pollDelay = Math.min(pollDelay * 2, 5000);
+    connDot.classList.add('err');
   }
   setTimeout(poll, pollDelay);
 }
