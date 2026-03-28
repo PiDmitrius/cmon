@@ -579,7 +579,7 @@ func doCLI(args []string) {
 func initEncryption(token string) {
 	encPhrase = token
 	key := sha256.Sum256([]byte(token))
-	encCtx = cryptashNew(key[:], 4, 4)
+	encCtx = cryptashNew(key[:], 16, 16)
 }
 
 // Notify helpers

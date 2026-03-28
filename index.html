@@ -298,7 +298,7 @@ const errEl = document.getElementById('err');
 
 async function tryKey(token) {
   const key = Cryptash.sha256(new TextEncoder().encode(token));
-  cryptashInstance = new Cryptash(key, 4, 4);
+  cryptashInstance = new Cryptash(key, 16, 16);
   // Auth handshake
   const nonce = Math.random().toString(36).substring(2);
   const resp = await apiCall({cmd: 'auth', nonce: nonce});
