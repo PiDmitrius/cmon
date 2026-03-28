@@ -49,6 +49,7 @@ body {
 #app {
   display: none; max-width: 1200px; margin: 0 auto;
   height: 100vh; height: 100dvh; flex-direction: column;
+  position: relative;
 }
 #app.active { display: flex; }
 #scroll-wrap {
@@ -137,13 +138,14 @@ body {
 }
 #conn-dot.err { background: #f85149; }
 #scroll-btn {
-  position: fixed; bottom: calc(16px + env(safe-area-inset-bottom)); right: 16px;
+  position: absolute; bottom: calc(16px + env(safe-area-inset-bottom)); right: 16px;
   background: #21262d; color: #8b949e; border: 1px solid #30363d;
   border-radius: 50%; width: 44px; height: 44px;
   font-size: 22px; line-height: 44px; text-align: center;
   cursor: pointer; display: none;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  z-index: 10;
 }
 #scroll-btn:hover { background: #30363d; color: #c9d1d9; }
 </style>
