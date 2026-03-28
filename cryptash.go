@@ -3,11 +3,13 @@ package main
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"sync"
 )
 
 const cryptashHashSize = 32
 
 type cryptashCtx struct {
+	mu       sync.Mutex
 	password []byte
 	ivsz     int
 	macsz    int
@@ -47,6 +49,8 @@ func (c *cryptashCtx) hashInto(dst *[cryptashHashSize]byte, a, b []byte) {
 }
 
 func (c *cryptashCtx) encrypt(data []byte) []byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	rand.Read(c.rnd)
 
 	ivsz := c.ivsz
@@ -87,6 +91,8 @@ func (c *cryptashCtx) encrypt(data []byte) []byte {
 }
 
 func (c *cryptashCtx) decrypt(data []byte) []byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	ivsz := c.ivsz
 	macsz := c.macsz
 
