@@ -114,6 +114,16 @@ go install github.com/PiDmitrius/cmon@latest
 cmon run
 ```
 
+## Local development
+
+Build and restart in one command (run from repo root):
+
+```bash
+go build -o ~/go/bin/cmon . && cmon stop && cmon run
+```
+
+No sudo needed — `~/go/bin/` is writable, and `cmon run` registers the absolute path in the systemd user service automatically.
+
 If `cmon` is not in PATH, use the full path: `~/go/bin/cmon run`.
 
 The systemd service records the absolute path to the binary automatically.

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"crypto/rand"
 	"crypto/sha256"
 	"embed"
 	"encoding/json"
@@ -23,7 +22,7 @@ import (
 )
 
 var (
-	encKey    [32]byte
+	encCtx    *cryptashCtx
 	encPhrase string
 )
 
@@ -575,110 +574,12 @@ func doCLI(args []string) {
 	cliWatchLoop()
 }
 
-// Cryptash (SHA-256 CBC keystream)
-
-const (
-	cryptashIVSize  = 4
-	cryptashMACSize = 4
-	cryptashBlock   = 32
-)
+// Cryptash init
 
 func initEncryption(token string) {
 	encPhrase = token
-	encKey = sha256.Sum256([]byte(encPhrase))
-}
-
-func sha256cat(a, b []byte) [32]byte {
-	buf := make([]byte, len(a)+len(b))
-	copy(buf, a)
-	copy(buf[len(a):], b)
-	return sha256.Sum256(buf)
-}
-
-func cryptashEncrypt(data []byte) []byte {
-	iv := make([]byte, cryptashIVSize)
-	rand.Read(iv)
-	pad := make([]byte, cryptashIVSize)
-	rand.Read(pad)
-
-	plaintext := make([]byte, cryptashIVSize+len(data))
-	copy(plaintext, pad)
-	copy(plaintext[cryptashIVSize:], data)
-
-	h := sha256cat(iv, encKey[:])
-	key := h[:]
-
-	macH := sha256cat(plaintext, key)
-	mac := make([]byte, cryptashMACSize)
-	copy(mac, macH[:cryptashMACSize])
-
-	prefix := make([]byte, cryptashIVSize+cryptashMACSize)
-	copy(prefix, iv)
-	copy(prefix[cryptashIVSize:], mac)
-
-	ct := cryptashCBC(prefix, key, plaintext, true)
-
-	result := make([]byte, len(prefix)+len(ct))
-	copy(result, prefix)
-	copy(result[len(prefix):], ct)
-	return result
-}
-
-func cryptashDecrypt(data []byte) []byte {
-	if len(data) < 12 {
-		return nil
-	}
-	iv := data[:4]
-	mac := data[4:8]
-
-	h := sha256cat(iv, encKey[:])
-	key := h[:]
-
-	prefix := data[:8]
-	ct := data[8:]
-	pt := cryptashCBC(prefix, key, ct, false)
-
-	macH := sha256cat(pt, key)
-	for i := 0; i < 4; i++ {
-		if mac[i] != macH[i] {
-			return nil
-		}
-	}
-	return pt[4:]
-}
-
-func cryptashCBC(v, k, d []byte, encrypt bool) []byte {
-	n := len(d)
-	if n == 0 {
-		return nil
-	}
-
-	h := sha256cat(v, k)
-	k = h[:]
-
-	o := make([]byte, n)
-	for i := 0; ; {
-		l := cryptashBlock
-		if n-i < l {
-			l = n - i
-		}
-		for j := 0; j < l; j++ {
-			o[i+j] = d[i+j] ^ k[j]
-		}
-		i += l
-		if i >= n {
-			break
-		}
-		var src []byte
-		if encrypt {
-			src = o[i-cryptashBlock : i]
-		} else {
-			src = d[i-cryptashBlock : i]
-		}
-		h = sha256cat(src, k)
-		k = h[:]
-	}
-	return o
+	key := sha256.Sum256([]byte(token))
+	encCtx = cryptashNew(key[:], 16, 16)
 }
 
 // Notify helpers
@@ -758,7 +659,7 @@ func serveAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plain := cryptashDecrypt(body)
+	plain := encCtx.decrypt(body)
 	if plain == nil {
 		apiError(w, "decrypt failed")
 		return
@@ -836,7 +737,7 @@ func apiRespond(w http.ResponseWriter, v interface{}) {
 }
 
 func apiRespondRaw(w http.ResponseWriter, plaintext []byte) {
-	ct := cryptashEncrypt(plaintext)
+	ct := encCtx.encrypt(plaintext)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Write(ct)
 }
