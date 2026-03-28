@@ -552,6 +552,18 @@ async function poll() {
 }
 poll();
 
+// Recover from background: mark uncertain on hide, verify on return
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    connDot.classList.add('err');
+  } else {
+    // Force a quick auth check to verify connectivity
+    apiCall({cmd: 'auth', nonce: 'wake'}).then(resp => {
+      if (resp) connDot.classList.remove('err');
+    }).catch(() => {});
+  }
+});
+
 } // end startApp
 </script>
 </body>
