@@ -51,8 +51,10 @@ type ContentBlock struct {
 	Text      string          `json:"text"`
 	Name      string          `json:"name"`
 	ID        string          `json:"id"`
+	ToolUseId string          `json:"tool_use_id"`
 	Input     json.RawMessage `json:"input,omitempty"`
 	Arguments json.RawMessage `json:"arguments,omitempty"`
+	Content   json.RawMessage `json:"content,omitempty"`
 }
 
 type ToolInput struct {
@@ -120,8 +122,26 @@ type config struct {
 	Port  int    `json:"port,omitempty"`
 }
 
+func cwdToProjectDirName(cwd string) string {
+	var b strings.Builder
+	for _, c := range cwd {
+		if c == '/' || c == '.' {
+			b.WriteRune('-')
+		} else {
+			b.WriteRune(c)
+		}
+	}
+	return b.String()
+}
+
 func defaultDir() string {
 	home, _ := os.UserHomeDir()
+	// Claude Code stores sessions under ~/.claude/projects/<cwd-based-name>/
+	workspace := filepath.Join(home, ".openclaw", "workspace")
+	claudeDir := filepath.Join(home, ".claude", "projects", cwdToProjectDirName(workspace))
+	if _, err := os.Stat(claudeDir); err == nil {
+		return claudeDir
+	}
 	return filepath.Join(home, ".openclaw", "agents", "main", "sessions")
 }
 
@@ -949,6 +969,12 @@ func parseEntries(r io.ReadSeeker, sid, status string) []Entry {
 }
 
 func recordToEntry(sid, status string, rec *Record) (Entry, bool) {
+	// New Claude Code format: type = "user" or "assistant"
+	if rec.Type == "user" || rec.Type == "assistant" {
+		return recordToEntryCC(sid, status, rec)
+	}
+
+	// Old openclaw format: type = "message"
 	if rec.Type != "message" || rec.Message == nil {
 		return Entry{}, false
 	}
@@ -1009,6 +1035,64 @@ func recordToEntry(sid, status string, rec *Record) (Entry, bool) {
 		if text != "" || toolName != "" {
 			return Entry{Time: t, Ts: ts, Unix: t.UnixMilli(), SID: displaySID, Role: "Tool", Text: text, ToolName: toolName, ToolMeta: toolMeta, ToolDesc: toolDesc}, true
 		}
+	}
+	return Entry{}, false
+}
+
+// recordToEntryCC handles the Claude Code JSONL format where top-level type is "user" or "assistant".
+func recordToEntryCC(sid, status string, rec *Record) (Entry, bool) {
+	if rec.Message == nil {
+		return Entry{}, false
+	}
+	t := parseTime(rec.Timestamp)
+	ts := formatTime(t)
+	displaySID := sid
+	if status != "" {
+		displaySID = sid + "/" + status
+	}
+
+	switch rec.Type {
+	case "assistant":
+		registerToolCalls(rec.Message.Content)
+		text := extractText(rec.Message.Content)
+		if text == "" {
+			return Entry{}, false
+		}
+		return Entry{Time: t, Ts: ts, Unix: t.UnixMilli(), SID: displaySID, Role: "Agent", Text: text}, true
+
+	case "user":
+		var blocks []ContentBlock
+		if json.Unmarshal(rec.Message.Content, &blocks) == nil {
+			for _, b := range blocks {
+				if b.Type != "tool_result" {
+					continue
+				}
+				if noTools {
+					return Entry{}, false
+				}
+				toolDesc := ""
+				mu.Lock()
+				if b.ToolUseId != "" {
+					toolDesc = toolCalls[b.ToolUseId]
+					delete(toolCalls, b.ToolUseId)
+				}
+				mu.Unlock()
+				text := extractText(b.Content)
+				if text != "" || toolDesc != "" {
+					return Entry{Time: t, Ts: ts, Unix: t.UnixMilli(), SID: displaySID, Role: "Tool", Text: text, ToolDesc: toolDesc}, true
+				}
+				return Entry{}, false
+			}
+		}
+		text := extractText(rec.Message.Content)
+		if text == "" {
+			return Entry{}, false
+		}
+		text = cleanUserText(text)
+		if text == "" {
+			return Entry{}, false
+		}
+		return Entry{Time: t, Ts: ts, Unix: t.UnixMilli(), SID: displaySID, Role: "User", Text: text}, true
 	}
 	return Entry{}, false
 }
