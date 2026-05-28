@@ -144,7 +144,7 @@ Browser                           Server
 - Auth: encrypted nonce handshake proves shared key
 - History: single encrypted JSON array, one decrypt on client
 - Live updates: long polling (30s timeout), generation tracking for structural changes
-- Cryptash: SHA-256 CBC stream cipher, 4-byte IV, 4-byte MAC
+- Cryptash: SHA-256 CBC stream cipher, 16-byte IV, 16-byte MAC
 - SHA-256: Go stdlib on server, pure JS in browser (no `crypto.subtle` -- works in HTTP contexts)
 - Sessions: parsed from OpenClaw JSONL via fsnotify, including deleted/reset files
 - Timezone: system default
