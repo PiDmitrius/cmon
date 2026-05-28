@@ -112,8 +112,9 @@ const (
 )
 
 const (
-	serviceName = "cmon"
-	serveEnv    = "CMON_SERVE"
+	serviceName   = "cmon"
+	serveEnv      = "CMON_SERVE"
+	historyWindow = 7 * 24 * time.Hour
 )
 
 type config struct {
@@ -137,11 +138,11 @@ func cwdToProjectDirName(cwd string) string {
 func defaultDir() string {
 	home, _ := os.UserHomeDir()
 	// Claude Code stores sessions under ~/.claude/projects/<cwd-based-name>/.
-	// The workspace path can change between OpenClaw versions, so instead of
-	// hardcoding it we pick the project dir holding the freshest .jsonl.
+	// Watch the projects root so cmon follows all workspaces instead of
+	// pinning itself to whichever project wrote the freshest file at startup.
 	projects := filepath.Join(home, ".claude", "projects")
-	if dir := freshestProjectDir(projects); dir != "" {
-		return dir
+	if _, err := os.Stat(projects); err == nil {
+		return projects
 	}
 	// Fallbacks: the historical hardcoded workspace, then the legacy layout.
 	workspace := filepath.Join(home, ".openclaw", "workspace")
@@ -150,41 +151,6 @@ func defaultDir() string {
 		return claudeDir
 	}
 	return filepath.Join(home, ".openclaw", "agents", "main", "sessions")
-}
-
-// freshestProjectDir returns the immediate subdirectory of projects that
-// contains the most recently modified *.jsonl file, or "" if none found.
-func freshestProjectDir(projects string) string {
-	entries, err := os.ReadDir(projects)
-	if err != nil {
-		return ""
-	}
-	var bestDir string
-	var bestMod time.Time
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		sub := filepath.Join(projects, e.Name())
-		files, err := os.ReadDir(sub)
-		if err != nil {
-			continue
-		}
-		for _, f := range files {
-			if f.IsDir() || !strings.HasSuffix(f.Name(), ".jsonl") {
-				continue
-			}
-			info, err := f.Info()
-			if err != nil {
-				continue
-			}
-			if info.ModTime().After(bestMod) {
-				bestMod = info.ModTime()
-				bestDir = sub
-			}
-		}
-	}
-	return bestDir
 }
 
 func configDir() string {
@@ -654,7 +620,13 @@ func notifyClients() {
 }
 
 func addEntry(e *Entry) {
+	if !entryInWindow(*e, time.Now()) {
+		return
+	}
 	histMu.Lock()
+	if pruneHistoryLocked(time.Now()) {
+		generation++
+	}
 	history = append(history, e)
 	histMu.Unlock()
 	notifyClients()
@@ -817,7 +789,7 @@ func watchLoop() {
 		return
 	}
 	defer watcher.Close()
-	if err := watcher.Add(sessionsDir); err != nil {
+	if err := addSessionWatches(watcher); err != nil {
 		fmt.Fprintf(os.Stderr, "watch %s: %v\n", sessionsDir, err)
 		return
 	}
@@ -827,6 +799,10 @@ func watchLoop() {
 		case event, ok := <-watcher.Events:
 			if !ok {
 				return
+			}
+			if event.Has(fsnotify.Create) && addCreatedDirWatch(watcher, event.Name) {
+				scheduleRescan()
+				continue
 			}
 			if !isSessionFile(event.Name) {
 				continue
@@ -857,7 +833,7 @@ func cliWatchLoop() {
 		os.Exit(1)
 	}
 	defer watcher.Close()
-	if err := watcher.Add(sessionsDir); err != nil {
+	if err := addSessionWatches(watcher); err != nil {
 		fmt.Fprintf(os.Stderr, "watch %s: %v\n", sessionsDir, err)
 		os.Exit(1)
 	}
@@ -867,6 +843,9 @@ func cliWatchLoop() {
 		case event, ok := <-watcher.Events:
 			if !ok {
 				return
+			}
+			if event.Has(fsnotify.Create) && addCreatedDirWatch(watcher, event.Name) {
+				continue
 			}
 			if !isSessionFile(event.Name) {
 				continue
@@ -892,6 +871,41 @@ func cliWatchLoop() {
 			fmt.Fprintf(os.Stderr, "watch error: %v\n", err)
 		}
 	}
+}
+
+func addSessionWatches(watcher *fsnotify.Watcher) error {
+	for _, dir := range sessionWatchDirs() {
+		if err := watcher.Add(dir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func addCreatedDirWatch(watcher *fsnotify.Watcher, path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() || filepath.Dir(path) != sessionsDir {
+		return false
+	}
+	if err := watcher.Add(path); err != nil {
+		fmt.Fprintf(os.Stderr, "watch %s: %v\n", path, err)
+		return false
+	}
+	return true
+}
+
+func sessionWatchDirs() []string {
+	dirs := []string{sessionsDir}
+	entries, err := os.ReadDir(sessionsDir)
+	if err != nil {
+		return dirs
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs = append(dirs, filepath.Join(sessionsDir, e.Name()))
+		}
+	}
+	return dirs
 }
 
 // File parsing
@@ -934,16 +948,60 @@ func sessionStatus(path string) string {
 }
 
 func collectAll() []Entry {
-	pattern := filepath.Join(sessionsDir, "*.jsonl*")
-	files, _ := filepath.Glob(pattern)
+	files := sessionFiles()
 	var all []Entry
+	now := time.Now()
 	for _, f := range files {
 		if !isSessionFile(f) {
 			continue
 		}
-		all = append(all, readAllEntries(f)...)
+		for _, e := range readAllEntries(f) {
+			if entryInWindow(e, now) {
+				all = append(all, e)
+			}
+		}
 	}
 	return all
+}
+
+func entryInWindow(e Entry, now time.Time) bool {
+	if e.Time.IsZero() {
+		return true
+	}
+	return !e.Time.Before(now.Add(-historyWindow))
+}
+
+func pruneHistoryLocked(now time.Time) bool {
+	cutoff := now.Add(-historyWindow)
+	orig := len(history)
+	keep := history[:0]
+	for _, e := range history {
+		if e == nil || e.Time.IsZero() || !e.Time.Before(cutoff) {
+			keep = append(keep, e)
+		}
+	}
+	history = keep
+	return len(history) != orig
+}
+
+func sessionFiles() []string {
+	var files []string
+	patterns := []string{
+		filepath.Join(sessionsDir, "*.jsonl*"),
+		filepath.Join(sessionsDir, "*", "*.jsonl*"),
+	}
+	seen := make(map[string]bool)
+	for _, pattern := range patterns {
+		matches, _ := filepath.Glob(pattern)
+		for _, f := range matches {
+			if seen[f] {
+				continue
+			}
+			seen[f] = true
+			files = append(files, f)
+		}
+	}
+	return files
 }
 
 func readAllEntries(path string) []Entry {
