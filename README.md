@@ -66,7 +66,10 @@ Open the URL, paste the token, done. Ctrl+C to stop.
 
 - `token` -- required, encryption key for web UI
 - `port` -- default 18787
-- `dir` -- default `~/.openclaw/agents/main/sessions`
+- `dir` -- default `~/.claude/projects`; cmon reads `*.jsonl*` in that
+  directory and one level below it, so all Claude project session directories
+  are covered. Legacy fallback is `~/.openclaw/agents/main/sessions`.
+- History window defaults to the last 7 days.
 
 ## CLI mode
 
@@ -144,9 +147,10 @@ Browser                           Server
 - Auth: encrypted nonce handshake proves shared key
 - History: single encrypted JSON array, one decrypt on client
 - Live updates: long polling (30s timeout), generation tracking for structural changes
-- Cryptash: SHA-256 CBC stream cipher, 4-byte IV, 4-byte MAC
+- Cryptash: SHA-256 CBC stream cipher, 16-byte IV, 16-byte MAC
 - SHA-256: Go stdlib on server, pure JS in browser (no `crypto.subtle` -- works in HTTP contexts)
-- Sessions: parsed from OpenClaw JSONL via fsnotify, including deleted/reset files
+- Sessions: parsed from Claude/OpenClaw JSONL via fsnotify, including
+  deleted/reset files
 - Timezone: system default
 
 ## License
