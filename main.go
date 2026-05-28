@@ -136,13 +136,55 @@ func cwdToProjectDirName(cwd string) string {
 
 func defaultDir() string {
 	home, _ := os.UserHomeDir()
-	// Claude Code stores sessions under ~/.claude/projects/<cwd-based-name>/
+	// Claude Code stores sessions under ~/.claude/projects/<cwd-based-name>/.
+	// The workspace path can change between OpenClaw versions, so instead of
+	// hardcoding it we pick the project dir holding the freshest .jsonl.
+	projects := filepath.Join(home, ".claude", "projects")
+	if dir := freshestProjectDir(projects); dir != "" {
+		return dir
+	}
+	// Fallbacks: the historical hardcoded workspace, then the legacy layout.
 	workspace := filepath.Join(home, ".openclaw", "workspace")
-	claudeDir := filepath.Join(home, ".claude", "projects", cwdToProjectDirName(workspace))
+	claudeDir := filepath.Join(projects, cwdToProjectDirName(workspace))
 	if _, err := os.Stat(claudeDir); err == nil {
 		return claudeDir
 	}
 	return filepath.Join(home, ".openclaw", "agents", "main", "sessions")
+}
+
+// freshestProjectDir returns the immediate subdirectory of projects that
+// contains the most recently modified *.jsonl file, or "" if none found.
+func freshestProjectDir(projects string) string {
+	entries, err := os.ReadDir(projects)
+	if err != nil {
+		return ""
+	}
+	var bestDir string
+	var bestMod time.Time
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		sub := filepath.Join(projects, e.Name())
+		files, err := os.ReadDir(sub)
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			if f.IsDir() || !strings.HasSuffix(f.Name(), ".jsonl") {
+				continue
+			}
+			info, err := f.Info()
+			if err != nil {
+				continue
+			}
+			if info.ModTime().After(bestMod) {
+				bestMod = info.ModTime()
+				bestDir = sub
+			}
+		}
+	}
+	return bestDir
 }
 
 func configDir() string {
